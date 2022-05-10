@@ -164,4 +164,15 @@ export default class Longhorn {
       deployments.body.items.map((deployment) => this.fixDeployment(deployment))
     );
   }
+
+  public async restartDeploymentsInNamespace(namespace: string): Promise<void> {
+    const deployments = await this.k8sAppsApi.listNamespacedDeployment(
+      namespace
+    );
+    for (const deployment of deployments.body.items) {
+      await this.scaleDeployment(deployment, 0);
+      await sleep(5000);
+      await this.scaleDeployment(deployment, 1);
+    }
+  }
 }
