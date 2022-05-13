@@ -113,6 +113,9 @@ export default class Longhorn {
       );
     } catch (e) {
       if (e instanceof HttpError) {
+        console.log(
+          `Received ${e.response.statusCode}: ${e.response.statusMessage}`
+        );
         if (e.response.statusCode === 409) {
           // Already scaled, ignore
         } else {
