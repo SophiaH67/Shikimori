@@ -5,7 +5,7 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
 RUN chmod +x ./kubectl
 RUN mv ./kubectl /usr/local/bin/kubectl
 
-COPY config /root/.kube/config
+COPY emptyfile confi[g] /root/.kube/
 COPY . .
 RUN npm install
 
