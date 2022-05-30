@@ -3,7 +3,10 @@ import { NodeSSH } from "node-ssh";
 import { Volume } from "./interfaces/LonghornVolume";
 import sleep from "sleep-promise";
 import fetch from "node-fetch";
-import { HttpError } from "@kubernetes/client-node";
+import { exec } from "child_process";
+import util from "util";
+
+const pexec = util.promisify(exec);
 
 export default class Longhorn {
   public static url = "http://localhost:9191";
@@ -93,57 +96,24 @@ export default class Longhorn {
     return this.getVolume(volume.id);
   }
 
-  public async scaleDeployment(deployment: k8s.V1Deployment, replicas: number) {
-    console.log(
-      `Scaling ${deployment.metadata?.name}(${deployment.metadata?.namespace}) to ${replicas} replicas`
+  public async scaleDeployment(
+    deployment: string,
+    namespace: string,
+    replicas: number
+  ) {
+    await pexec(
+      `kubectl scale --replicas=${replicas} -n ${namespace} deployment ${deployment}`
     );
-    if (
-      !deployment.spec ||
-      !deployment.metadata?.name ||
-      !deployment.metadata?.namespace
-    ) {
-      throw new Error("Deployment has no spec");
-    }
-    deployment.spec.replicas = replicas;
-    try {
-      await this.k8sAppsApi.replaceNamespacedDeployment(
-        deployment.metadata!.name!,
-        deployment.metadata!.namespace!,
-        deployment
-      );
-    } catch (e) {
-      if (e instanceof HttpError) {
-        if (e.response.statusCode === 409) {
-          // Already scaled, ignore
-        } else {
-          throw e;
-        }
-      }
-    }
-
-    // Wait for deployment to scale
-    if (replicas === 0) {
-      console.log(`Waiting for ${deployment.metadata?.name} to scale down`);
-      // Wait for pods to be deleted
-      while (
-        (
-          await this.k8sApi.listNamespacedPod(
-            deployment.metadata?.namespace || "default"
-          )
-        ).body.items.some(
-          (pod) => pod.metadata?.labels?.app === deployment.metadata?.name
-        )
-      ) {
-        await sleep(1000);
-      }
-    }
   }
 
   public async fixDeployment(deployment: k8s.V1Deployment) {
-    await this.scaleDeployment(deployment, 0);
+    await this.scaleDeployment(
+      deployment.metadata!.name!,
+      deployment.metadata!.namespace!,
+      0
+    );
     for (const volume of deployment.spec?.template.spec?.volumes || []) {
       if (!volume.persistentVolumeClaim?.claimName) continue;
-      await this.scaleDeployment(deployment, 0);
       const kvolume = await this.k8sApi.readNamespacedPersistentVolumeClaim(
         volume.persistentVolumeClaim.claimName,
         deployment.metadata!.namespace!
@@ -153,7 +123,11 @@ export default class Longhorn {
       );
       await this.fixVolume(longhornVolume);
     }
-    await this.scaleDeployment(deployment, 1);
+    await this.scaleDeployment(
+      deployment.metadata!.name!,
+      deployment.metadata!.namespace!,
+      1
+    );
   }
 
   public async fixVolumesInNamespace(namespace: string): Promise<void> {
@@ -166,13 +140,6 @@ export default class Longhorn {
   }
 
   public async restartDeploymentsInNamespace(namespace: string): Promise<void> {
-    const deployments = await this.k8sAppsApi.listNamespacedDeployment(
-      namespace
-    );
-    for (const deployment of deployments.body.items) {
-      await this.scaleDeployment(deployment, 0);
-      await sleep(5000);
-      await this.scaleDeployment(deployment, 1);
-    }
+    await pexec(`kubectl rollout restart deployment -n ${namespace}`);
   }
 }
