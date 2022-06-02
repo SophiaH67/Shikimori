@@ -12,8 +12,17 @@ export default class Fix implements Command {
       throw new Error("You must specify a namespace");
     }
     const namespace = args[1];
+    const deploymentName = args[2];
     const longhorn = new Longhorn();
-    await longhorn.fixVolumesInNamespace(namespace);
+    if (deploymentName) {
+      const deployment = await longhorn.k8sAppsApi.readNamespacedDeployment(
+        deploymentName,
+        namespace
+      );
+      await longhorn.fixDeployment(deployment.body);
+    } else {
+      await longhorn.fixVolumesInNamespace(namespace);
+    }
     return "It should be fixed now";
   }
 }

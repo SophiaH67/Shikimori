@@ -10,8 +10,8 @@ const pexec = util.promisify(exec);
 
 export default class Longhorn {
   public static url = "http://localhost:9191";
-  private k8sApi: k8s.CoreV1Api;
-  private k8sAppsApi: k8s.AppsV1Api;
+  public k8sApi: k8s.CoreV1Api;
+  public k8sAppsApi: k8s.AppsV1Api;
 
   constructor() {
     const kc = new k8s.KubeConfig();
