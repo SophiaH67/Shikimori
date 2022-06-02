@@ -107,6 +107,7 @@ export default class Longhorn {
   }
 
   public async fixDeployment(deployment: k8s.V1Deployment) {
+    console.log(`Fixing ${deployment.metadata?.name}`);
     await this.scaleDeployment(
       deployment.metadata!.name!,
       deployment.metadata!.namespace!,
@@ -131,11 +132,15 @@ export default class Longhorn {
   }
 
   public async fixVolumesInNamespace(namespace: string): Promise<void> {
-    const deployments = await this.k8sAppsApi.listNamespacedDeployment(
-      namespace
+    let deployments = (
+      await this.k8sAppsApi.listNamespacedDeployment(namespace)
+    ).body.items;
+    deployments = deployments.filter(
+      // All deployments that have a volume
+      (deployment) => (deployment.spec?.template.spec?.volumes?.length || 0) > 0
     );
     await Promise.all(
-      deployments.body.items.map((deployment) => this.fixDeployment(deployment))
+      deployments.map((deployment) => this.fixDeployment(deployment))
     );
   }
 
